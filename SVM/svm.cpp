@@ -1,95 +1,127 @@
-#include "../include/svm.h"
+#include "Svm.h"
+/**
+ * @brief NumClassfier构造函数
+*/
+NumClassfier::NumClassfier()
+{   
+    sample_size = 40;
+    binary_threshold = 20;
+    //loadSvmModel(model_path);
+    HOG_SVM();
+    dst_apex_cord[0] = Point2f(0,sample_size);
+    dst_apex_cord[1] = Point2f(0,0);
+    dst_apex_cord[2] = Point2f(sample_size,0);
+    dst_apex_cord[3] = Point2f(sample_size,sample_size);
+}
 
-int GetNum::getnum(Mat src, RotatedRect roi)
+//svm类函数
+    HOG_SVM::HOG_SVM()
+    {
+        m_label2id = {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 11}, {7, 7}, {8, 8}};
+        m_hog.winSize = Size(48, 32);
+        m_hog.blockSize = Size(16, 16);
+        m_hog.blockStride = Size(8, 8);
+        m_hog.cellSize = Size(8, 8);
+        m_hog.nbins = 9;
+        m_hog.derivAperture = 1;
+        m_hog.winSigma = -1;
+        m_hog.histogramNormType = HOGDescriptor::L2Hys;
+        m_hog.L2HysThreshold = 0.2;
+        m_hog.gammaCorrection = false;
+        m_hog.free_coef = -1.f;
+        m_hog.nlevels = HOGDescriptor::DEFAULT_NLEVELS;
+        m_hog.signedGradient = false;
+        if (m_svm)
+        {
+            m_svm->clear();
+        }
+        m_svm = SVM::load(model_path);
+    }
+    int HOG_SVM::test(const Mat &src)
+    {
+        if (m_svm)
+        {
+            vector<float> descriptors;
+            m_hog.compute(src, descriptors, Size(8, 8));
+            int label = m_svm->predict(descriptors);
+            return m_label2id[label];
+        }
+        else
+        {
+            return 0;
+        }
+    }
+/**
+ *@brief 载入SVM模型
+ *@param path SVM模型路径
+ *@return 是否成功载入 
+ */
+bool NumClassfier::loadSvmModel(const string &path)
 {
-    if(roi.size.height <= 0 || roi.size.width <= 0)
+    svm = StatModel::load<SVM>(path);
+    if(svm.empty())
     {
-        return -1;
-    }
-    if(roi.center.x - roi.size.width / 2 <= 0)
-    {
-        roi.center.x = roi.size.width / 2;
-    }
-    else if(roi.center.y - roi.size.height / 2 <= 0)
-    {
-        roi.center.y = roi.size.width / 2;
+        cout<<"svm model path failure"<<endl;
+        return false;
     }
 
-    Rect rect_roi = roi.boundingRect();
-    rect_roi.height *= 1.5;
-    if(rect_roi.x >= src.size().width || rect_roi.y >= src.size().height)
-    {
-        return -1;
-    }
-
-    if(rect_roi.x < 0)
-    {
-        rect_roi.x = 0;
-    }
-
-    if(rect_roi.y < 0)
-    {
-        rect_roi.y = 0;
-    }
-
-
-    if(rect_roi.x + rect_roi.width > src.size().width)
-    {
-        rect_roi.width = src.size().width - rect_roi.x;
-    }
-
-    if(rect_roi.y + rect_roi.height > src.size().height)
-    {
-        rect_roi.height = src.size().height - rect_roi.y;
-    }
-
-    // if(rect_roi.x < 0)
-    // {
-    //     rect_roi.x = 0;
-    // }
-    // else if(rect_roi.y < 0)
-    // {
-    //     rect_roi.y = 0;
-    // }
-    
-    // if(rect_roi.width <= 0 || rect_roi.height <=0)
-    // {
-    //     return -1;;
-    // }
-    Mat dst = src(rect_roi).clone();
-
-
-    if(dst.size().height <= 0 || dst.size().width <= 0)
-    {
-        return -1;
-    }
-    resize(dst, dst, Size(100, 25));
-
-    cvtColor(dst, dst, COLOR_BGR2GRAY);
-    threshold(dst, dst, 5, 255, THRESH_OTSU);
-
-    //HOG提取特征
-    vector<float> descriptors;
-    HOGDescriptor * hog = new HOGDescriptor(Size(24, 24), Size(16, 16), Size(8, 8), Size(8, 8), 9);
-    hog->compute(dst, descriptors, Size(1, 1), Size(0, 0));
-
-    Mat temp;
-    temp = Mat(descriptors).clone();
-    temp = temp.reshape(1, 1);//输入图片序列化
-
-    Mat input;
-    input.push_back(temp);
-    input.convertTo(input, CV_32FC1);       //更改图片数据的类型，不然会出错
-
-    float num = svm_model->predict(input);  //预测
-
-#ifdef SHOW_SVM_RESULT  
-    char buf[255];
-    sprintf(buf, "num = %d", (int)num);
-    putText(src, buf, Point(20, 100), FONT_HERSHEY_COMPLEX, 3, Scalar(255, 0, 0), 3);
-    imshow("src", src);
-    waitKey(1);
-#endif
-
-    return (int)num;
+    cout<<"svm load succeed"<<endl;
+    return true;
+}
+/**
+ * @brief SVM主函数
+ * @param src 原图
+ * @param ArmorPlate 目标装甲板
+ * @return 是否成功运行
+*/
+bool NumClassfier::runSvm(const Mat &src,ArmorPlate &target_armor)
+{
+    Mat sample_img = Mat::zeros(Size(sample_size,sample_size),CV_8UC1);
+    Mat sample_img_reshaped;
+    //图像初始化
+    initImg(src,sample_img,target_armor);
+    //样本reshape与改变格式
+    //sample_img_reshaped = sample_img.reshape(1, 1);
+	//sample_img_reshaped.convertTo(sample_img_reshaped, CV_32FC1);
+    num=m_svm.test(sample_img);
+    cout<<"num:"<<num<<endl;
+    cout<<"---------------------------------------"<<endl;
+    //cout<<"num:"<<(int)svm->predict(sample_img_reshaped)<<endl;
+    //计算结果
+    //target_armor.serial = (int)svm->predict(sample_img_reshaped);
+    return true;
+}
+/**
+ * @brief 图像初始化
+ * @param src 原图
+ * @param dst 处理后图像
+ * @param target_armor 目标装甲板
+ * @return 是否成功初始化
+*/
+bool NumClassfier::initImg(const Mat &src,Mat &dst,const ArmorPlate &target_armor)
+{
+    Mat warped_img = Mat::zeros(Size(sample_size,sample_size),CV_8UC3);
+    Mat src_gray;
+    //设置扩张高度
+    int extented_height = 0.5 * std::min(target_armor.rrect.size.width,target_armor.rrect.size.height);
+    //计算归一化的装甲板左右边缘方向向量
+    Point2f left_edge_vector = (target_armor.apex[1] - target_armor.apex[0]) / pointsDistance(target_armor.apex[1] , target_armor.apex[0]);//由0指向1
+    Point2f right_edge_vector = (target_armor.apex[2] - target_armor.apex[3]) / pointsDistance(target_armor.apex[2] , target_armor.apex[3]);//由3指向2
+    src_apex_cord[0] = target_armor.apex[0] - left_edge_vector * extented_height;
+    src_apex_cord[1] = target_armor.apex[1] + left_edge_vector * extented_height;
+    src_apex_cord[2] = target_armor.apex[2] + right_edge_vector * extented_height;
+    src_apex_cord[3] = target_armor.apex[3] - right_edge_vector * extented_height;
+    //计算透视变换矩阵
+    Mat warp_matrix = getPerspectiveTransform(src_apex_cord,dst_apex_cord);
+    //进行图像透视变换
+    warpPerspective(src, warped_img, warp_matrix, Size(sample_size,sample_size), INTER_NEAREST, BORDER_CONSTANT, Scalar(0));
+    //进行图像的灰度化与二值化
+    cvtColor(warped_img,src_gray,COLOR_BGR2GRAY);
+    threshold(src_gray,dst,binary_threshold,255,THRESH_BINARY);
+    resize(dst, dst, Size(48, 32));
+    //转换尺寸
+    Rect front_roi(Point(20, 0), Size(10, 32));
+    Mat front_roi_img = dst(front_roi);
+    //imshow("dstaaaaaaa",dst);
+    return true;
 }
