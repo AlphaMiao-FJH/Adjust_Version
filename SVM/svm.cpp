@@ -82,13 +82,13 @@ bool NumClassfier::runSvm(const Mat &src,ArmorPlate &target_armor)
     initImg(src,sample_img,target_armor);
     //样本reshape与改变格式
     //sample_img_reshaped = sample_img.reshape(1, 1);
-	//sample_img_reshaped.convertTo(sample_img_reshaped, CV_32FC1);
+    //sample_img_reshaped.convertTo(sample_img_reshaped, CV_32FC1);
     num=m_svm.test(sample_img);
     cout<<"num:"<<num<<endl;
     cout<<"---------------------------------------"<<endl;
     //cout<<"num:"<<(int)svm->predict(sample_img_reshaped)<<endl;
     //计算结果
-    //target_armor.serial = (int)svm->predict(sample_img_reshaped);
+    target_armor.serial = num;
     return true;
 }
 /**
