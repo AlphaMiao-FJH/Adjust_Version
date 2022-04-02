@@ -237,6 +237,7 @@ void ImageProcess::ImageConsumer()
 #ifdef SAVE_DATA
         SaveData();
 #endif
+        present_armor.serial = classfier.runSvm(src,present_armor);
     }
 }
 
